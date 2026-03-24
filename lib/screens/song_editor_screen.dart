@@ -33,10 +33,8 @@ class _EditableSection {
     );
   }
 
-  SongSection toSongSection() => SongSection(
-        title: title,
-        body: controller.text,
-      );
+  SongSection toSongSection() =>
+      SongSection(title: title, body: controller.text);
 
   void dispose() {
     controller.dispose();
@@ -56,8 +54,6 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
 
   static const _presets = <String>[
     'Intro',
-    'Verse 1',
-    'Verse 2',
     'Verse',
     'Pre-Chorus',
     'Chorus',
@@ -87,7 +83,7 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
       _replaceSections(const [
         SongSection(title: 'Intro', body: ''),
         SongSection(
-          title: 'Verse 1',
+          title: 'Verse',
           body: '[C]Your lyrics...\n[G]Chords in [brackets]',
         ),
         SongSection(title: 'Chorus', body: ''),
@@ -96,11 +92,7 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
 
     if (_sections.isEmpty) {
       _sections.add(
-        _EditableSection(
-          id: const Uuid().v4(),
-          title: 'Verse 1',
-          body: '',
-        ),
+        _EditableSection(id: const Uuid().v4(), title: 'Verse 1', body: ''),
       );
     }
 
@@ -198,11 +190,7 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
 
       if (_sections.isEmpty) {
         _sections.add(
-          _EditableSection(
-            id: const Uuid().v4(),
-            title: 'Verse 1',
-            body: '',
-          ),
+          _EditableSection(id: const Uuid().v4(), title: 'Verse 1', body: ''),
         );
       }
     });
@@ -211,11 +199,7 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
   void _addSection() {
     setState(() {
       _sections.add(
-        _EditableSection(
-          id: const Uuid().v4(),
-          title: 'Verse',
-          body: '',
-        ),
+        _EditableSection(id: const Uuid().v4(), title: 'Verse', body: ''),
       );
     });
   }
@@ -233,9 +217,7 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -290,10 +272,9 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
               Expanded(
                 child: Text(
                   'Sections',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               OutlinedButton.icon(

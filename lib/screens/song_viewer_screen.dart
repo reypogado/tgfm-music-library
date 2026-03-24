@@ -163,7 +163,7 @@ class _SongViewerScreenState extends ConsumerState<SongViewerScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            sec.title,
+                            '${sec.title}:',
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),

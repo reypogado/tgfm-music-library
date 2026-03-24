@@ -1,67 +1,88 @@
 class SongSection {
-  final String title; // e.g. "Verse 1", "Chorus"
-  final String body;  // chordpro body only
-  const SongSection({required this.title, required this.body});
+  final String title;
+  final String body;
 
-  SongSection copyWith({String? title, String? body}) =>
-      SongSection(title: title ?? this.title, body: body ?? this.body);
+  const SongSection({
+    required this.title,
+    required this.body,
+  });
 }
 
-/// Parse text that uses "## Section" headers.
-List<SongSection> parseSections(String text) {
-  final src = text.replaceAll('\r\n', '\n').trim();
-  if (src.isEmpty) return const [SongSection(title: 'Verse 1', body: '')];
+String _normalizeSectionTitle(String title) {
+  return title.replaceAll(RegExp(r'\s+\d+$'), '').trim();
+}
 
-  final lines = src.split('\n');
-  final sections = <SongSection>[];
+List<SongSection> parseSections(String raw) {
+  final lines = raw.replaceAll('\r\n', '\n').split('\n');
 
-  String currentTitle = 'Verse 1';
-  final buf = StringBuffer();
+  final rawSections = <SongSection>[];
 
-  bool sawHeader = false;
+  String? currentTitle;
+  final currentBody = <String>[];
 
-  void flush() {
-    final body = buf.toString().trimRight();
-    if (body.isNotEmpty || sections.isNotEmpty) {
-      sections.add(SongSection(title: currentTitle, body: body));
-    }
-    buf.clear();
+  bool isHeaderLine(String line) {
+    final trimmed = line.trim();
+    return trimmed.startsWith('## ');
+  }
+
+  void flushRaw() {
+    if (currentTitle == null) return;
+
+    rawSections.add(
+      SongSection(
+        title: _normalizeSectionTitle(currentTitle!),
+        body: currentBody.join('\n').trimRight(),
+      ),
+    );
+
+    currentBody.clear();
   }
 
   for (final line in lines) {
-    if (line.startsWith('## ')) {
-      sawHeader = true;
-      flush();
-      currentTitle = line.substring(3).trim().isEmpty ? 'Section' : line.substring(3).trim();
-      continue;
+    if (isHeaderLine(line)) {
+      flushRaw();
+      currentTitle = line.trim().substring(3).trim();
+    } else {
+      currentBody.add(line);
     }
-    buf.writeln(line);
-  }
-  flush();
-
-  // If no headers were found, treat whole text as Verse 1
-  if (!sawHeader) {
-    return [SongSection(title: 'Verse 1', body: src)];
   }
 
-  // Remove empty leading section if any
-  return sections.where((s) => s.title.trim().isNotEmpty).toList();
+  flushRaw();
+
+  if (rawSections.isEmpty) return [];
+
+  final totals = <String, int>{};
+  for (final sec in rawSections) {
+    totals[sec.title] = (totals[sec.title] ?? 0) + 1;
+  }
+
+  final seen = <String, int>{};
+  final result = <SongSection>[];
+
+  for (final sec in rawSections) {
+    final count = (seen[sec.title] ?? 0) + 1;
+    seen[sec.title] = count;
+
+    final total = totals[sec.title] ?? 1;
+
+    final displayTitle = total > 1
+        ? '${sec.title} $count'
+        : '${sec.title} 1';
+
+    result.add(
+      SongSection(
+        title: displayTitle,
+        body: sec.body,
+      ),
+    );
+  }
+
+  return result;
 }
 
 String serializeSections(List<SongSection> sections) {
-  final cleaned = sections
-      .where((s) => s.title.trim().isNotEmpty)
-      .map((s) => SongSection(title: s.title.trim(), body: s.body.trimRight()))
-      .toList();
-
-  if (cleaned.isEmpty) return '';
-
-  final out = StringBuffer();
-  for (int i = 0; i < cleaned.length; i++) {
-    final s = cleaned[i];
-    out.writeln('## ${s.title}');
-    if (s.body.isNotEmpty) out.writeln(s.body);
-    if (i != cleaned.length - 1) out.writeln(); // blank line between sections
-  }
-  return out.toString().trimRight();
+  return sections.map((s) {
+    final normalizedTitle = _normalizeSectionTitle(s.title);
+    return '## $normalizedTitle\n${s.body}'.trimRight();
+  }).join('\n\n');
 }

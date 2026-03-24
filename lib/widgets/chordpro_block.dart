@@ -47,63 +47,63 @@ class ChordProBlock extends StatelessWidget {
     height: 1.2,
   );
 
-  @override
-  Widget build(BuildContext context) {
-    final transposed = ChordPro.transposeChordPro(
-      chordProText,
-      transposeSemitones,
-    );
+@override
+Widget build(BuildContext context) {
+  final transposed = ChordPro.transposeChordPro(
+    chordProText,
+    transposeSemitones,
+  );
 
-    final input = numbersMode
-        ? Nashville.chordProToNumbersOnly(transposed, songKey)
-        : transposed;
+  final input = numbersMode
+      ? Nashville.chordProToNumbersOnly(transposed, songKey)
+      : transposed;
 
-    if (chordsOnly) {
-      final chordLines = _buildFriendlyChordLines(input);
+  if (chordsOnly) {
+    final chordLines = _buildFriendlyChordLines(input);
 
-      if (chordLines.isEmpty) {
-        return Text(
-          '(No chords)',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
-        );
-      }
-
-      return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final line in chordLines) ...[
-              Text(line, softWrap: false, style: _getChordStyle()),
-              const SizedBox(height: 10),
-            ],
-          ],
-        ),
+    if (chordLines.isEmpty) {
+      return Text(
+        '(No chords)',
+        style: Theme.of(context)
+            .textTheme
+            .bodyMedium
+            ?.copyWith(fontStyle: FontStyle.italic),
       );
     }
 
-    final parsedLines = _parseLines(input);
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final line in parsedLines)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _MeasuredChordLine(
-                line: line,
-                chordStyle: _getChordStyle(),
-                lyricStyle: _lyricStyle,
-              ),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final line in chordLines) ...[
+          Text(
+            line,
+            softWrap: true,
+            overflow: TextOverflow.visible,
+            style: _getChordStyle(),
+          ),
+          const SizedBox(height: 10),
         ],
-      ),
+      ],
     );
   }
+
+  final parsedLines = _parseLines(input);
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      for (final line in parsedLines)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _MeasuredChordLine(
+            line: line,
+            chordStyle: _getChordStyle(),
+            lyricStyle: _lyricStyle,
+          ),
+        ),
+    ],
+  );
+}
 
   List<_ParsedLine> _parseLines(String chordPro) {
     final lines = chordPro.replaceAll('\r\n', '\n').split('\n');
@@ -298,7 +298,7 @@ class _MeasuredChordLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final chordHeight = _measureTextHeight('C', chordStyle);
     final lyricHeight = _measureTextHeight(line.lyrics, lyricStyle);
-    final lyricWidth = _measureTextWidth(line.lyrics, lyricStyle);
+    final lyricWidth = _measureTextWidth('${line.lyrics} ', lyricStyle);
 
     const double minGap = 6;
 
@@ -327,7 +327,7 @@ class _MeasuredChordLine extends StatelessWidget {
     }
 
     return SizedBox(
-      width: maxRight,
+     width: maxRight + 8, 
       height: chordHeight + lyricHeight + 2,
       child: Stack(
         children: [

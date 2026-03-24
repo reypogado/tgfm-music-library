@@ -55,9 +55,16 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
   static const _presets = <String>[
     'Intro',
     'Verse',
+    'Verse 2',
+    'Verse 3',
     'Pre-Chorus',
+    'Post-Chorus',
     'Chorus',
+    'Chorus 2'
+    'Chorus 3',
     'Bridge',
+    'Bridge 2',
+    'Bridge 3',
     'Tag',
     'Outro',
   ];

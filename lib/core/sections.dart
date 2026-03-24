@@ -65,9 +65,11 @@ List<SongSection> parseSections(String raw) {
 
     final total = totals[sec.title] ?? 1;
 
-    final displayTitle = total > 1
-        ? '${sec.title} $count'
-        : '${sec.title} 1';
+    // final displayTitle = total > 1
+    //     ? '${sec.title} $count'
+    //     : '${sec.title} 1';
+
+    final displayTitle = sec.title;
 
     result.add(
       SongSection(

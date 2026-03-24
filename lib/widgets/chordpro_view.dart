@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:tgfm_music_library/core/chrodpro.dart';
+import 'package:tgfm_music_library/widgets/chordpro_block.dart';
 
 class ChordProView extends StatelessWidget {
   final String chordProText;
@@ -13,40 +13,10 @@ class ChordProView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final transposed = ChordPro.transposeChordPro(chordProText, transposeSemitones);
-    final lines = ChordPro.render(transposed);
-
-    return SelectionArea(
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: lines.length,
-        itemBuilder: (_, i) {
-          final l = lines[i];
-          final showChords = l.chords.trim().isNotEmpty;
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (showChords)
-                  Text(
-                    l.chords,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                Text(
-                  l.lyrics,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+    return ChordProBlock(
+      chordProText: chordProText,
+      transposeSemitones: transposeSemitones,
+      songKey: 'C',
     );
   }
 }

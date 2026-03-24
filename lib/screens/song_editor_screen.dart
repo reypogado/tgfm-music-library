@@ -14,6 +14,35 @@ class SongEditorScreen extends ConsumerStatefulWidget {
   ConsumerState<SongEditorScreen> createState() => _SongEditorScreenState();
 }
 
+class _EditableSection {
+  final String id;
+  String title;
+  final TextEditingController controller;
+
+  _EditableSection({
+    required this.id,
+    required this.title,
+    required String body,
+  }) : controller = TextEditingController(text: body);
+
+  factory _EditableSection.fromSongSection(SongSection s) {
+    return _EditableSection(
+      id: const Uuid().v4(),
+      title: s.title,
+      body: s.body,
+    );
+  }
+
+  SongSection toSongSection() => SongSection(
+        title: title,
+        body: controller.text,
+      );
+
+  void dispose() {
+    controller.dispose();
+  }
+}
+
 class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
   final _title = TextEditingController();
   final _artist = TextEditingController();
@@ -23,7 +52,7 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
   bool _loading = true;
   bool _saving = false;
 
-  final List<SongSection> _sections = [];
+  final List<_EditableSection> _sections = [];
 
   static const _presets = <String>[
     'Intro',
@@ -51,25 +80,42 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
         _artist.text = _existing!.artist;
         _key.text = _existing!.keyName;
 
-        _sections
-          ..clear()
-          ..addAll(parseSections(_existing!.chordPro));
+        final parsed = parseSections(_existing!.chordPro);
+        _replaceSections(parsed);
       }
     } else {
-      _sections
-        ..clear()
-        ..addAll(const [
-          SongSection(title: 'Intro', body: ''),
-          SongSection(title: 'Verse 1', body: '[C]Your lyrics...\n[G]Chords in [brackets]'),
-          SongSection(title: 'Chorus', body: ''),
-        ]);
+      _replaceSections(const [
+        SongSection(title: 'Intro', body: ''),
+        SongSection(
+          title: 'Verse 1',
+          body: '[C]Your lyrics...\n[G]Chords in [brackets]',
+        ),
+        SongSection(title: 'Chorus', body: ''),
+      ]);
     }
 
     if (_sections.isEmpty) {
-      _sections.add(const SongSection(title: 'Verse 1', body: ''));
+      _sections.add(
+        _EditableSection(
+          id: const Uuid().v4(),
+          title: 'Verse 1',
+          body: '',
+        ),
+      );
     }
 
-    setState(() => _loading = false);
+    if (mounted) {
+      setState(() => _loading = false);
+    }
+  }
+
+  void _replaceSections(List<SongSection> sections) {
+    for (final s in _sections) {
+      s.dispose();
+    }
+    _sections
+      ..clear()
+      ..addAll(sections.map(_EditableSection.fromSongSection));
   }
 
   @override
@@ -77,6 +123,9 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
     _title.dispose();
     _artist.dispose();
     _key.dispose();
+    for (final s in _sections) {
+      s.dispose();
+    }
     super.dispose();
   }
 
@@ -90,7 +139,9 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
       final artist = _artist.text.trim();
       final keyName = _key.text.trim().isEmpty ? 'C' : _key.text.trim();
 
-      final chordPro = serializeSections(_sections);
+      final chordPro = serializeSections(
+        _sections.map((e) => e.toSongSection()).toList(),
+      );
 
       if (_existing == null) {
         final s = Song(
@@ -117,7 +168,7 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
         await sync.queueUpsert(s);
       }
 
-      await sync.syncNow(); // best-effort
+      await sync.syncNow();
       if (mounted) Navigator.pop(context);
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -127,41 +178,65 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
   void _moveUp(int i) {
     if (i <= 0) return;
     setState(() {
-      final tmp = _sections[i - 1];
-      _sections[i - 1] = _sections[i];
-      _sections[i] = tmp;
+      final item = _sections.removeAt(i);
+      _sections.insert(i - 1, item);
     });
   }
 
   void _moveDown(int i) {
     if (i >= _sections.length - 1) return;
     setState(() {
-      final tmp = _sections[i + 1];
-      _sections[i + 1] = _sections[i];
-      _sections[i] = tmp;
+      final item = _sections.removeAt(i);
+      _sections.insert(i + 1, item);
     });
   }
 
   void _remove(int i) {
     setState(() {
-      _sections.removeAt(i);
-      if (_sections.isEmpty) _sections.add(const SongSection(title: 'Verse 1', body: ''));
+      final removed = _sections.removeAt(i);
+      removed.dispose();
+
+      if (_sections.isEmpty) {
+        _sections.add(
+          _EditableSection(
+            id: const Uuid().v4(),
+            title: 'Verse 1',
+            body: '',
+          ),
+        );
+      }
     });
   }
 
   void _addSection() {
-    setState(() => _sections.add(const SongSection(title: 'Verse', body: '')));
+    setState(() {
+      _sections.add(
+        _EditableSection(
+          id: const Uuid().v4(),
+          title: 'Verse',
+          body: '',
+        ),
+      );
+    });
   }
 
   void _appendChord(int i, String chord) {
-    final cur = _sections[i].body;
-    final next = cur.isEmpty ? '[$chord]' : '$cur[$chord]';
-    setState(() => _sections[i] = _sections[i].copyWith(body: next));
+    final controller = _sections[i].controller;
+    final cur = controller.text;
+    controller.text = cur.isEmpty ? '[$chord]' : '$cur[$chord]';
+    controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: controller.text.length),
+    );
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -172,7 +247,11 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
             child: FilledButton.icon(
               onPressed: _saving ? null : _save,
               icon: _saving
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Icon(Icons.save),
               label: const Text('Save'),
             ),
@@ -184,26 +263,37 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
         children: [
           TextField(
             controller: _title,
-            decoration: const InputDecoration(labelText: 'Title', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: 'Title',
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _artist,
-            decoration: const InputDecoration(labelText: 'Artist', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: 'Artist',
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _key,
-            decoration: const InputDecoration(labelText: 'Key (C, G, Bb, F#...)', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: 'Key (C, G, Bb, F#...)',
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 16),
-
           Row(
             children: [
               Expanded(
                 child: Text(
                   'Sections',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
               OutlinedButton.icon(
@@ -214,11 +304,11 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
             ],
           ),
           const SizedBox(height: 12),
-
           ...List.generate(_sections.length, (i) {
             final sec = _sections[i];
 
             return Padding(
+              key: ValueKey(sec.id),
               padding: const EdgeInsets.only(bottom: 14),
               child: Card(
                 child: Padding(
@@ -230,13 +320,22 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              value: _presets.contains(sec.title) ? sec.title : 'Verse',
+                              value: _presets.contains(sec.title)
+                                  ? sec.title
+                                  : 'Verse',
                               items: _presets
-                                  .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                                  .map(
+                                    (t) => DropdownMenuItem(
+                                      value: t,
+                                      child: Text(t),
+                                    ),
+                                  )
                                   .toList(),
                               onChanged: (v) {
                                 if (v == null) return;
-                                setState(() => _sections[i] = _sections[i].copyWith(title: v));
+                                setState(() {
+                                  sec.title = v;
+                                });
                               },
                               decoration: const InputDecoration(
                                 labelText: 'Section',
@@ -252,7 +351,9 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
                           ),
                           IconButton(
                             tooltip: 'Move down',
-                            onPressed: i == _sections.length - 1 ? null : () => _moveDown(i),
+                            onPressed: i == _sections.length - 1
+                                ? null
+                                : () => _moveDown(i),
                             icon: const Icon(Icons.arrow_downward),
                           ),
                           IconButton(
@@ -263,9 +364,8 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
                         ],
                       ),
                       const SizedBox(height: 10),
-
                       TextFormField(
-                        initialValue: sec.body,
+                        controller: sec.controller,
                         minLines: 6,
                         maxLines: 14,
                         style: const TextStyle(fontFamily: 'monospace'),
@@ -274,34 +374,30 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
                           border: OutlineInputBorder(),
                           alignLabelWithHint: true,
                         ),
-                        onChanged: (v) {
-                          _sections[i] = _sections[i].copyWith(body: v);
-                        },
                       ),
 
-                      // const SizedBox(height: 10),
-                      // Wrap(
-                      //   spacing: 8,
-                      //   runSpacing: 8,
-                      //   children: [
-                      //     for (final c in const ['C', 'Dm', 'Em', 'F', 'G', 'Am', 'G/B', 'C/E'])
-                      //       ActionChip(
-                      //         label: Text(c),
-                      //         onPressed: () => _appendChord(i, c),
-                      //       ),
-                      //   ],
-                      // ),
+                      /*
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final c in const [
+                            'C', 'Dm', 'Em', 'F', 'G', 'Am', 'G/B', 'C/E'
+                          ])
+                            ActionChip(
+                              label: Text(c),
+                              onPressed: () => _appendChord(i, c),
+                            ),
+                        ],
+                      ),
+                      */
                     ],
                   ),
                 ),
               ),
             );
           }),
-
-          // const SizedBox(height: 8),
-          // const Text(
-          //   'Tip: Use [C] chord format inside section body.\nSections will be saved using "## Section" headers.',
-          // ),
         ],
       ),
     );

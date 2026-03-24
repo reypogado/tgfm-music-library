@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
-        android:label="tgfm_music_library"
+        android:label="TGFM Music Library"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

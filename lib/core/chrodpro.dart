@@ -121,6 +121,9 @@ class ChordPro {
     'Gb', 'G', 'Ab', 'A', 'Bb', 'B'
   ];
 
+  /// Lyrics-only songs have no key; some carry a placeholder in the field.
+  static bool isMusicalKey(String key) => _noteIndex(key.trim()) != null;
+
   static int? _noteIndex(String note) {
     final i1 = _sharp.indexOf(note);
     if (i1 != -1) return i1;

@@ -64,3 +64,6 @@ android/app/release/
 # iOS
 ios/Pods/
 ios/.symlinks/
+
+# FVM (the pinned version lives in .fvmrc; the symlink is machine-local)
+.fvm/flutter_sdk

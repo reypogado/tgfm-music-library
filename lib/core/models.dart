@@ -3,7 +3,11 @@ class Song {
   final String title;
   final String artist;
   final String keyName;
-  final String chordPro;
+  final String chordPro;  // chords only ('## Section' blocks of [C] tokens)
+  final String lyrics;    // lyrics only ('## Section' blocks of plain text)
+  final String songType;  // Praise | Worship | Warfare, or '' when unset
+  final String language;  // Tagalog | Bisaya | English, or '' when unset
+  final String theme;     // free text, suggestions in SongTheme.values
   final int updatedAt;    // ms epoch
   final bool dirty;       // pending push
   final bool deleted;     // soft delete locally
@@ -14,6 +18,10 @@ class Song {
     required this.artist,
     required this.keyName,
     required this.chordPro,
+    this.lyrics = '',
+    this.songType = '',
+    this.language = '',
+    this.theme = '',
     required this.updatedAt,
     required this.dirty,
     required this.deleted,
@@ -25,6 +33,10 @@ class Song {
     String? artist,
     String? keyName,
     String? chordPro,
+    String? lyrics,
+    String? songType,
+    String? language,
+    String? theme,
     int? updatedAt,
     bool? dirty,
     bool? deleted,
@@ -35,6 +47,10 @@ class Song {
       artist: artist ?? this.artist,
       keyName: keyName ?? this.keyName,
       chordPro: chordPro ?? this.chordPro,
+      lyrics: lyrics ?? this.lyrics,
+      songType: songType ?? this.songType,
+      language: language ?? this.language,
+      theme: theme ?? this.theme,
       updatedAt: updatedAt ?? this.updatedAt,
       dirty: dirty ?? this.dirty,
       deleted: deleted ?? this.deleted,
@@ -47,6 +63,10 @@ class Song {
         'artist': artist,
         'key_name': keyName,
         'chord_pro': chordPro,
+        'lyrics': lyrics,
+        'song_type': songType,
+        'language': language,
+        'theme': theme,
         'updated_at': updatedAt,
         'dirty': dirty ? 1 : 0,
         'deleted': deleted ? 1 : 0,
@@ -58,6 +78,10 @@ class Song {
         artist: (m['artist'] as String?) ?? '',
         keyName: (m['key_name'] as String?) ?? 'C',
         chordPro: (m['chord_pro'] as String?) ?? '',
+        lyrics: (m['lyrics'] as String?) ?? '',
+        songType: (m['song_type'] as String?) ?? '',
+        language: (m['language'] as String?) ?? '',
+        theme: (m['theme'] as String?) ?? '',
         updatedAt: (m['updated_at'] as int?) ?? 0,
         dirty: ((m['dirty'] as int?) ?? 0) == 1,
         deleted: ((m['deleted'] as int?) ?? 0) == 1,
@@ -68,6 +92,10 @@ class Song {
         'artist': artist,
         'keyName': keyName,
         'chordPro': chordPro,
+        'lyrics': lyrics,
+        'songType': songType,
+        'language': language,
+        'theme': theme,
         'updatedAt': updatedAt,
         'deleted': deleted,
       };

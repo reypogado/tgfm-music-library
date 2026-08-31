@@ -14,7 +14,25 @@ class LocalDbMobile implements LocalDb {
 
     _db = await openDatabase(
       path,
-      version: 1,
+      version: 3,
+      onUpgrade: (d, from, to) async {
+        // v2 moved lyrics out of chord_pro into their own column. Existing rows
+        // keep their chord_pro untouched and are split on read until saved.
+        if (from < 2) {
+          await d.execute(
+            "ALTER TABLE songs ADD COLUMN lyrics TEXT NOT NULL DEFAULT ''",
+          );
+        }
+        // v3 added the browsing categories. Existing rows default to empty and
+        // show up under "Uncategorized" until they are filled in.
+        if (from < 3) {
+          for (final col in ['song_type', 'language', 'theme']) {
+            await d.execute(
+              "ALTER TABLE songs ADD COLUMN $col TEXT NOT NULL DEFAULT ''",
+            );
+          }
+        }
+      },
       onCreate: (d, _) async {
         await d.execute('''
           CREATE TABLE songs (
@@ -23,6 +41,10 @@ class LocalDbMobile implements LocalDb {
             artist TEXT NOT NULL,
             key_name TEXT NOT NULL,
             chord_pro TEXT NOT NULL,
+            lyrics TEXT NOT NULL DEFAULT '',
+            song_type TEXT NOT NULL DEFAULT '',
+            language TEXT NOT NULL DEFAULT '',
+            theme TEXT NOT NULL DEFAULT '',
             updated_at INTEGER NOT NULL,
             dirty INTEGER NOT NULL,
             deleted INTEGER NOT NULL

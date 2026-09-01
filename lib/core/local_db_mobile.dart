@@ -14,7 +14,7 @@ class LocalDbMobile implements LocalDb {
 
     _db = await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onUpgrade: (d, from, to) async {
         // v2 moved lyrics out of chord_pro into their own column. Existing rows
         // keep their chord_pro untouched and are split on read until saved.
@@ -32,6 +32,16 @@ class LocalDbMobile implements LocalDb {
             );
           }
         }
+        // v4 made themes multi-valued. The v3 column held a single theme, so
+        // carry it over as a one-item list.
+        if (from < 4) {
+          await d.execute(
+            "ALTER TABLE songs ADD COLUMN themes TEXT NOT NULL DEFAULT ''",
+          );
+          if (from >= 3) {
+            await d.execute('UPDATE songs SET themes = theme');
+          }
+        }
       },
       onCreate: (d, _) async {
         await d.execute('''
@@ -44,7 +54,7 @@ class LocalDbMobile implements LocalDb {
             lyrics TEXT NOT NULL DEFAULT '',
             song_type TEXT NOT NULL DEFAULT '',
             language TEXT NOT NULL DEFAULT '',
-            theme TEXT NOT NULL DEFAULT '',
+            themes TEXT NOT NULL DEFAULT '',
             updated_at INTEGER NOT NULL,
             dirty INTEGER NOT NULL,
             deleted INTEGER NOT NULL

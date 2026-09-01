@@ -67,7 +67,7 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
   // "Uncategorized" rather than guessing.
   String _songType = '';
   String _language = '';
-  String _theme = '';
+  final Set<String> _themes = {};
 
   /// Chords or lyrics — `both` is a viewer-only mode.
   SongView _mode = SongView.chords;
@@ -107,7 +107,9 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
         _key.text = _existing!.keyName;
         _songType = _existing!.songType;
         _language = _existing!.language;
-        _theme = _existing!.theme;
+        _themes
+          ..clear()
+          ..addAll(_existing!.themes);
 
         final content = SongContent.of(_existing!);
         _replaceSections(content.merged);
@@ -154,6 +156,17 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
     super.dispose();
   }
 
+  /// Stored in the team's own theme order, not the order they were tapped, so
+  /// two songs with the same themes always read the same.
+  List<String> _orderedThemes() {
+    final out = _themes.toList()
+      ..sort((a, b) {
+        final byRank = SongTheme.rank(a).compareTo(SongTheme.rank(b));
+        return byRank != 0 ? byRank : a.compareTo(b);
+      });
+    return out;
+  }
+
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
@@ -178,7 +191,7 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
               lyrics: doc.lyrics,
               songType: _songType,
               language: _language,
-              theme: _theme,
+              themes: _orderedThemes(),
               updatedAt: now,
               dirty: true,
               deleted: false,
@@ -191,7 +204,7 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
               lyrics: doc.lyrics,
               songType: _songType,
               language: _language,
-              theme: _theme,
+              themes: _orderedThemes(),
               updatedAt: now,
               dirty: true,
               deleted: false,
@@ -332,7 +345,8 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Used to group the library. Tap to set, tap again to clear.',
+            'Used to group the library. Tap to set, tap again to clear. '
+            'A song can carry several themes.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -351,11 +365,11 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
             onChanged: (v) => setState(() => _language = v),
           ),
           const SizedBox(height: 12),
-          _ChipPicker(
-            label: 'Theme',
-            options: SongTheme.values,
-            selected: _theme,
-            onChanged: (v) => setState(() => _theme = v),
+          _ThemePicker(
+            selected: _themes,
+            onToggled: (t) => setState(() {
+              if (!_themes.remove(t)) _themes.add(t);
+            }),
           ),
           const SizedBox(height: 20),
 
@@ -426,6 +440,9 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<String>(
+                              // Without this the field sizes to its widest
+                              // preset and overflows on a narrow phone.
+                              isExpanded: true,
                               value: _presets.contains(sec.title)
                                   ? sec.title
                                   : 'Verse',
@@ -558,6 +575,96 @@ class _ChipPicker extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Multi-select theme picker, colour-coded to the team's chart. Any number of
+/// themes can be on at once.
+class _ThemePicker extends StatelessWidget {
+  final Set<String> selected;
+  final ValueChanged<String> onToggled;
+
+  const _ThemePicker({required this.selected, required this.onToggled});
+
+  @override
+  Widget build(BuildContext context) {
+    // A theme saved before it was on the chart still shows and stays removable.
+    final all = [
+      ...SongTheme.values,
+      ...selected.where((t) => !SongTheme.values.contains(t)),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Themes', style: Theme.of(context).textTheme.labelLarge),
+            const Spacer(),
+            if (selected.isNotEmpty)
+              Text(
+                '${selected.length} selected',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final t in all) _ThemeChip(
+              theme: t,
+              selected: selected.contains(t),
+              onTap: () => onToggled(t),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ThemeChip extends StatelessWidget {
+  final String theme;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ThemeChip({
+    required this.theme,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = SongTheme.colorOf(theme);
+
+    // Unselected chips show the colour only as an outline, so the palette does
+    // not shout over the whole form.
+    return FilterChip(
+      label: Text(theme),
+      selected: selected,
+      showCheckmark: false,
+      avatar: selected
+          ? const Icon(Icons.check, size: 18, color: SongTheme.onColor)
+          : (color == null
+              ? null
+              : CircleAvatar(backgroundColor: color, radius: 8)),
+      backgroundColor: Colors.transparent,
+      selectedColor: color ?? scheme.secondaryContainer,
+      labelStyle: TextStyle(
+        color: selected ? SongTheme.onColor : scheme.onSurface,
+        fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+      ),
+      side: BorderSide(
+        color: selected
+            ? (color ?? scheme.secondaryContainer)
+            : (color ?? scheme.outline).withValues(alpha: 0.6),
+      ),
+      onSelected: (_) => onTap(),
     );
   }
 }

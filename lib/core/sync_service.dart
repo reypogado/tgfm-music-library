@@ -125,7 +125,7 @@ class SyncService {
         lyrics: (c['lyrics'] ?? '') as String,
         songType: (c['songType'] ?? '') as String,
         language: (c['language'] ?? '') as String,
-        theme: (c['theme'] ?? '') as String,
+        themes: decodeThemes(c['themes'] ?? c['theme']),
         updatedAt: updatedAt,
         dirty: false,
         deleted: (c['deleted'] ?? false) == true,

@@ -1,3 +1,24 @@
+/// Themes are stored as one delimited string so the sqflite column and the
+/// hand-rolled Firestore encoder both stay plain strings. '|' cannot appear in
+/// a theme name (they use '/' and '&').
+const kThemeSeparator = '|';
+
+String encodeThemes(List<String> themes) =>
+    themes.map((t) => t.trim()).where((t) => t.isNotEmpty).join(kThemeSeparator);
+
+/// Tolerates the older single-valued `theme` field and any stray whitespace.
+List<String> decodeThemes(Object? raw) {
+  if (raw is List) {
+    return raw.map((e) => '$e'.trim()).where((e) => e.isNotEmpty).toList();
+  }
+  final s = (raw as String?) ?? '';
+  return s
+      .split(kThemeSeparator)
+      .map((t) => t.trim())
+      .where((t) => t.isNotEmpty)
+      .toList();
+}
+
 class Song {
   final String id;        // local uuid (also used as Firestore docId)
   final String title;
@@ -7,7 +28,7 @@ class Song {
   final String lyrics;    // lyrics only ('## Section' blocks of plain text)
   final String songType;  // Praise | Worship | Warfare, or '' when unset
   final String language;  // Tagalog | Bisaya | English, or '' when unset
-  final String theme;     // free text, suggestions in SongTheme.values
+  final List<String> themes; // zero or more, see SongTheme.values
   final int updatedAt;    // ms epoch
   final bool dirty;       // pending push
   final bool deleted;     // soft delete locally
@@ -21,7 +42,7 @@ class Song {
     this.lyrics = '',
     this.songType = '',
     this.language = '',
-    this.theme = '',
+    this.themes = const [],
     required this.updatedAt,
     required this.dirty,
     required this.deleted,
@@ -36,7 +57,7 @@ class Song {
     String? lyrics,
     String? songType,
     String? language,
-    String? theme,
+    List<String>? themes,
     int? updatedAt,
     bool? dirty,
     bool? deleted,
@@ -50,7 +71,7 @@ class Song {
       lyrics: lyrics ?? this.lyrics,
       songType: songType ?? this.songType,
       language: language ?? this.language,
-      theme: theme ?? this.theme,
+      themes: themes ?? this.themes,
       updatedAt: updatedAt ?? this.updatedAt,
       dirty: dirty ?? this.dirty,
       deleted: deleted ?? this.deleted,
@@ -66,7 +87,7 @@ class Song {
         'lyrics': lyrics,
         'song_type': songType,
         'language': language,
-        'theme': theme,
+        'themes': encodeThemes(themes),
         'updated_at': updatedAt,
         'dirty': dirty ? 1 : 0,
         'deleted': deleted ? 1 : 0,
@@ -81,7 +102,7 @@ class Song {
         lyrics: (m['lyrics'] as String?) ?? '',
         songType: (m['song_type'] as String?) ?? '',
         language: (m['language'] as String?) ?? '',
-        theme: (m['theme'] as String?) ?? '',
+        themes: decodeThemes(m['themes'] ?? m['theme']),
         updatedAt: (m['updated_at'] as int?) ?? 0,
         dirty: ((m['dirty'] as int?) ?? 0) == 1,
         deleted: ((m['deleted'] as int?) ?? 0) == 1,
@@ -95,7 +116,7 @@ class Song {
         'lyrics': lyrics,
         'songType': songType,
         'language': language,
-        'theme': theme,
+        'themes': encodeThemes(themes),
         'updatedAt': updatedAt,
         'deleted': deleted,
       };

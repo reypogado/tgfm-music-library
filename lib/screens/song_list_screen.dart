@@ -85,7 +85,7 @@ class _SongListScreenState extends ConsumerState<SongListScreen> {
     if (s.artist.toLowerCase().contains(q)) return true;
     if (s.songType.toLowerCase().contains(q)) return true;
     if (s.language.toLowerCase().contains(q)) return true;
-    if (s.theme.toLowerCase().contains(q)) return true;
+    if (s.themes.any((t) => t.toLowerCase().contains(q))) return true;
     if (content.hasChords && s.keyName.toLowerCase().contains(q)) return true;
 
     // Let people find a song by a line they remember.
@@ -112,9 +112,6 @@ class _SongListScreenState extends ConsumerState<SongListScreen> {
     }
     if (_grouping != SongGrouping.language && s.language.isNotEmpty) {
       parts.add(s.language);
-    }
-    if (_grouping != SongGrouping.theme && s.theme.isNotEmpty) {
-      parts.add(s.theme);
     }
     if (s.dirty) parts.add('Pending sync');
     return parts.join(' • ');
@@ -367,6 +364,9 @@ class _SongListScreenState extends ConsumerState<SongListScreen> {
       _FolderHeader(
         name: folder.name,
         count: folder.songs.length,
+        color: _grouping == SongGrouping.theme
+            ? SongTheme.colorOf(folder.name)
+            : null,
         open: open,
         onTap: () => setState(() {
           if (open) {
@@ -387,8 +387,26 @@ class _SongListScreenState extends ConsumerState<SongListScreen> {
     return ListTile(
       key: ValueKey(s.id),
       contentPadding: EdgeInsets.only(left: indented ? 28 : 16, right: 8),
+      isThreeLine: s.themes.isNotEmpty,
       title: Text(s.title.isEmpty ? '(Untitled)' : s.title),
-      subtitle: Text(_subtitleFor(s, content)),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(_subtitleFor(s, content)),
+          if (s.themes.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  for (final t in s.themes) _ThemeTag(theme: t),
+                ],
+              ),
+            ),
+        ],
+      ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -561,6 +579,7 @@ class _FolderHeader extends StatelessWidget {
   final String name;
   final int count;
   final bool open;
+  final Color? color;
   final VoidCallback onTap;
 
   const _FolderHeader({
@@ -568,6 +587,7 @@ class _FolderHeader extends StatelessWidget {
     required this.count,
     required this.open,
     required this.onTap,
+    this.color,
   });
 
   @override
@@ -582,11 +602,23 @@ class _FolderHeader extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
           child: Row(
             children: [
-              Icon(
-                open ? Icons.folder_open : Icons.folder,
-                size: 20,
-                color: scheme.primary,
-              ),
+              // A theme folder is marked with its own colour; other groupings
+              // keep the plain folder icon.
+              if (color != null)
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                )
+              else
+                Icon(
+                  open ? Icons.folder_open : Icons.folder,
+                  size: 20,
+                  color: scheme.primary,
+                ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -637,3 +669,34 @@ class _ContentBadge extends StatelessWidget {
     );
   }
 }
+
+/// Compact colour-coded theme label shown under a song in the list.
+class _ThemeTag extends StatelessWidget {
+  final String theme;
+
+  const _ThemeTag({required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        SongTheme.colorOf(theme) ?? Theme.of(context).colorScheme.surfaceContainerHighest;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        theme,
+        style: const TextStyle(
+          fontSize: 11,
+          height: 1.3,
+          color: SongTheme.onColor,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+

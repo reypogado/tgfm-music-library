@@ -21,7 +21,7 @@ Future<String?> promptPlaylistName(
         autofocus: true,
         textCapitalization: TextCapitalization.sentences,
         decoration: const InputDecoration(
-          hintText: 'e.g. Sunday service, Youth night',
+          hintText: 'e.g. Marahan Voices Playlist',
         ),
         onSubmitted: (v) => Navigator.pop(ctx, v),
       ),

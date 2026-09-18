@@ -7,6 +7,7 @@ class LocalDbWeb implements LocalDb {
   Database? _db;
 
   final _songsStore = stringMapStoreFactory.store('songs');
+  final _playlistsStore = stringMapStoreFactory.store('playlists');
   final _outboxStore = stringMapStoreFactory.store('outbox');
   final _metaStore = stringMapStoreFactory.store('meta');
 
@@ -29,17 +30,17 @@ class LocalDbWeb implements LocalDb {
   }
 
   @override
-  Future<int> getLastSync() async {
+  Future<int> getLastSync({String key = 'last_sync'}) async {
     final db = await _database;
-    final row = await _metaStore.record('last_sync').get(db);
+    final row = await _metaStore.record(key).get(db);
     if (row == null) return 0;
     return int.tryParse('${row['v']}') ?? 0;
   }
 
   @override
-  Future<void> setLastSync(int ts) async {
+  Future<void> setLastSync(int ts, {String key = 'last_sync'}) async {
     final db = await _database;
-    await _metaStore.record('last_sync').put(db, {'v': ts.toString()});
+    await _metaStore.record(key).put(db, {'v': ts.toString()});
   }
 
   @override
@@ -98,6 +99,64 @@ class LocalDbWeb implements LocalDb {
     }
 
     await _songsStore.record(id).put(db, updated);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listPlaylists() async {
+    final db = await _database;
+    final records = await _playlistsStore.find(
+      db,
+      finder: Finder(sortOrders: [SortOrder('updated_at', false)]),
+    );
+
+    return records
+        .map((e) => Map<String, dynamic>.from(e.value))
+        .where((e) => (e['deleted'] ?? 0) == 0)
+        .toList();
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getPlaylist(String id) async {
+    final db = await _database;
+    final row = await _playlistsStore.record(id).get(db);
+    if (row == null) return null;
+    return Map<String, dynamic>.from(row);
+  }
+
+  @override
+  Future<void> upsertPlaylist(Map<String, dynamic> data) async {
+    final db = await _database;
+    final id = data['id'] as String;
+    await _playlistsStore.record(id).put(db, data);
+  }
+
+  @override
+  Future<void> markPlaylistDeleted(String id, int updatedAt) async {
+    final db = await _database;
+    final row = await _playlistsStore.record(id).get(db);
+    if (row == null) return;
+
+    final updated = Map<String, dynamic>.from(row);
+    updated['deleted'] = 1;
+    updated['dirty'] = 1;
+    updated['updated_at'] = updatedAt;
+
+    await _playlistsStore.record(id).put(db, updated);
+  }
+
+  @override
+  Future<void> markPlaylistClean(String id, {int? updatedAt}) async {
+    final db = await _database;
+    final row = await _playlistsStore.record(id).get(db);
+    if (row == null) return;
+
+    final updated = Map<String, dynamic>.from(row);
+    updated['dirty'] = 0;
+    if (updatedAt != null) {
+      updated['updated_at'] = updatedAt;
+    }
+
+    await _playlistsStore.record(id).put(db, updated);
   }
 
   @override

@@ -7,6 +7,7 @@ import '../core/providers.dart';
 import '../core/settings.dart';
 import '../core/song_content.dart';
 import '../core/song_taxonomy.dart';
+import '../widgets/playlist_dialogs.dart';
 import 'song_editor_screen.dart';
 import 'song_viewer_screen.dart';
 
@@ -49,6 +50,7 @@ class _SongListScreenState extends ConsumerState<SongListScreen> {
     try {
       final r = await ref.read(syncServiceProvider).syncNow();
       ref.invalidate(songsProvider);
+      ref.invalidate(playlistsProvider);
       setState(() => _syncMsg = 'Synced: pushed ${r.pushed}, pulled ${r.pulled}');
     } catch (e) {
       setState(() => _syncMsg = 'Sync error: $e');
@@ -437,6 +439,11 @@ class _SongListScreenState extends ConsumerState<SongListScreen> {
               onTap: () => Navigator.pop(ctx, 'edit'),
             ),
             ListTile(
+              leading: const Icon(Icons.playlist_add),
+              title: const Text('Add to playlist'),
+              onTap: () => Navigator.pop(ctx, 'playlist'),
+            ),
+            ListTile(
               leading: const Icon(Icons.delete),
               title: const Text('Delete'),
               onTap: () => Navigator.pop(ctx, 'delete'),
@@ -447,6 +454,11 @@ class _SongListScreenState extends ConsumerState<SongListScreen> {
     );
 
     if (!mounted || action == null) return;
+
+    if (action == 'playlist') {
+      await showAddToPlaylistSheet(context, ref, s);
+      return;
+    }
 
     if (action == 'edit') {
       await Navigator.of(context).push(

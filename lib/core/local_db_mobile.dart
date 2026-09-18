@@ -14,7 +14,7 @@ class LocalDbMobile implements LocalDb {
 
     _db = await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onUpgrade: (d, from, to) async {
         // v2 moved lyrics out of chord_pro into their own column. Existing rows
         // keep their chord_pro untouched and are split on read until saved.
@@ -42,6 +42,14 @@ class LocalDbMobile implements LocalDb {
             await d.execute('UPDATE songs SET themes = theme');
           }
         }
+        // v5 added playlists. They share the outbox with songs, so each row
+        // now says which kind of document it refers to.
+        if (from < 5) {
+          await _createPlaylists(d);
+          await d.execute(
+            "ALTER TABLE outbox ADD COLUMN kind TEXT NOT NULL DEFAULT 'song'",
+          );
+        }
       },
       onCreate: (d, _) async {
         await d.execute('''
@@ -61,11 +69,14 @@ class LocalDbMobile implements LocalDb {
           );
         ''');
 
+        await _createPlaylists(d);
+
         await d.execute('''
           CREATE TABLE outbox (
             id TEXT PRIMARY KEY,
             song_id TEXT NOT NULL,
             op TEXT NOT NULL,
+            kind TEXT NOT NULL DEFAULT 'song',
             created_at INTEGER NOT NULL
           );
         ''');
@@ -84,18 +95,31 @@ class LocalDbMobile implements LocalDb {
     return _db!;
   }
 
+  static Future<void> _createPlaylists(Database d) async {
+    await d.execute('''
+      CREATE TABLE playlists (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        song_ids TEXT NOT NULL DEFAULT '',
+        updated_at INTEGER NOT NULL,
+        dirty INTEGER NOT NULL,
+        deleted INTEGER NOT NULL
+      );
+    ''');
+  }
+
   @override
   Future<void> init() async {
     await _database;
   }
 
   @override
-  Future<int> getLastSync() async {
+  Future<int> getLastSync({String key = 'last_sync'}) async {
     final db = await _database;
     final rows = await db.query(
       'meta',
       where: 'k=?',
-      whereArgs: ['last_sync'],
+      whereArgs: [key],
       limit: 1,
     );
     if (rows.isEmpty) return 0;
@@ -103,13 +127,13 @@ class LocalDbMobile implements LocalDb {
   }
 
   @override
-  Future<void> setLastSync(int ts) async {
+  Future<void> setLastSync(int ts, {String key = 'last_sync'}) async {
     final db = await _database;
-    await db.update(
+    // Insert-or-replace so a cursor added after onCreate (playlists) works too.
+    await db.insert(
       'meta',
-      {'v': ts.toString()},
-      where: 'k=?',
-      whereArgs: ['last_sync'],
+      {'k': key, 'v': ts.toString()},
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
@@ -165,6 +189,64 @@ class LocalDbMobile implements LocalDb {
       updates['updated_at'] = updatedAt;
     }
     await db.update('songs', updates, where: 'id=?', whereArgs: [id]);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listPlaylists() async {
+    final db = await _database;
+    return db.query(
+      'playlists',
+      where: 'deleted=0',
+      orderBy: 'updated_at DESC',
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getPlaylist(String id) async {
+    final db = await _database;
+    final rows = await db.query(
+      'playlists',
+      where: 'id=?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return Map<String, dynamic>.from(rows.first);
+  }
+
+  @override
+  Future<void> upsertPlaylist(Map<String, dynamic> data) async {
+    final db = await _database;
+    await db.insert(
+      'playlists',
+      data,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  @override
+  Future<void> markPlaylistDeleted(String id, int updatedAt) async {
+    final db = await _database;
+    await db.update(
+      'playlists',
+      {
+        'deleted': 1,
+        'dirty': 1,
+        'updated_at': updatedAt,
+      },
+      where: 'id=?',
+      whereArgs: [id],
+    );
+  }
+
+  @override
+  Future<void> markPlaylistClean(String id, {int? updatedAt}) async {
+    final db = await _database;
+    final updates = <String, Object?>{'dirty': 0};
+    if (updatedAt != null) {
+      updates['updated_at'] = updatedAt;
+    }
+    await db.update('playlists', updates, where: 'id=?', whereArgs: [id]);
   }
 
   @override

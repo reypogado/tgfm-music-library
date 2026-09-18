@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/chrodpro.dart';
 import '../core/models.dart';
 import '../core/providers.dart';
 import '../core/song_content.dart';
+import '../core/song_text.dart';
 import '../widgets/chordpro_block.dart';
 import '../widgets/lyrics_block.dart';
 import 'song_editor_screen.dart';
@@ -60,13 +62,20 @@ String transposeLabel(int semitones) {
 
 class SongViewerScreen extends ConsumerStatefulWidget {
   final String songId;
-  const SongViewerScreen({super.key, required this.songId});
+
+  /// When opened from a playlist, the ids of every song in that playlist, in
+  /// order, so the viewer can step to the previous/next song without going
+  /// back to the list mid-service.
+  final List<String>? queue;
+
+  const SongViewerScreen({super.key, required this.songId, this.queue});
 
   @override
   ConsumerState<SongViewerScreen> createState() => _SongViewerScreenState();
 }
 
 class _SongViewerScreenState extends ConsumerState<SongViewerScreen> {
+  late String _songId = widget.songId;
   int _transpose = 0;
   bool _simplify = false;
   bool _numbersMode = false;
@@ -91,12 +100,46 @@ class _SongViewerScreenState extends ConsumerState<SongViewerScreen> {
     return const [SongView.chords];
   }
 
+  int get _queueIndex => widget.queue?.indexOf(_songId) ?? -1;
+
+  /// Each song opens fresh: its own key, its own default view.
+  void _jumpTo(String id) {
+    setState(() {
+      _songId = id;
+      _transpose = 0;
+      _simplify = false;
+      _view = null;
+    });
+  }
+
+  Future<void> _copy(
+    Song song,
+    SongView view, {
+    required bool simplify,
+  }) async {
+    final text = SongText.render(
+      song,
+      view: view,
+      transpose: _transpose,
+      numbersMode: _numbersMode,
+      simplify: simplify,
+    );
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Copied as text')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final repo = ref.watch(songRepoProvider);
+    final queue = widget.queue;
+    final queueIndex = _queueIndex;
 
     return FutureBuilder<Song?>(
-      future: repo.getSong(widget.songId),
+      key: ValueKey(_songId),
+      future: repo.getSong(_songId),
       builder: (context, snap) {
         if (!snap.hasData || snap.data == null) {
           return const Scaffold(
@@ -173,34 +216,49 @@ class _SongViewerScreenState extends ConsumerState<SongViewerScreen> {
                           available: available,
                           onChanged: (v) => setState(() => _view = v),
                         ),
-                      if (available.length > 1 && hasKey)
-                        const SizedBox(height: 10),
-                      if (hasKey)
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Key: ${song.keyName} → $newKey '
-                                '(${transposeLabel(_transpose)})',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                      if (available.length > 1) const SizedBox(height: 6),
+                      // The copy button lives here rather than in the app bar
+                      // so it stays visible next to the key on narrow phones.
+                      Row(
+                        children: [
+                          Expanded(
+                            child: hasKey
+                                ? Text(
+                                    'Key: ${song.keyName} → $newKey '
+                                    '(${transposeLabel(_transpose)})',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => _copy(
+                              song,
+                              view,
+                              simplify: _simplify && view == SongView.chords,
                             ),
-                          ],
-                        ),
+                            icon: const Icon(Icons.copy, size: 18),
+                            label: const Text('Copy text'),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
               ),
 
+              // Selectable so a long-press / drag can grab any part of the
+              // song directly, on top of the one-tap copy above.
               Expanded(
-                child: _SongBody(
-                  content: content,
-                  view: view,
-                  songKey: song.keyName,
-                  transpose: _transpose,
-                  simplify: _simplify && view == SongView.chords,
-                  numbersMode: _numbersMode,
+                child: SelectionArea(
+                  child: _SongBody(
+                    content: content,
+                    view: view,
+                    songKey: song.keyName,
+                    transpose: _transpose,
+                    simplify: _simplify && view == SongView.chords,
+                    numbersMode: _numbersMode,
+                  ),
                 ),
               ),
 
@@ -229,8 +287,71 @@ class _SongViewerScreenState extends ConsumerState<SongViewerScreen> {
                 ),
             ],
           ),
+          bottomNavigationBar: queue == null || queueIndex < 0
+              ? null
+              : _QueueBar(
+                  index: queueIndex,
+                  total: queue.length,
+                  onPrevious: queueIndex > 0
+                      ? () => _jumpTo(queue[queueIndex - 1])
+                      : null,
+                  onNext: queueIndex < queue.length - 1
+                      ? () => _jumpTo(queue[queueIndex + 1])
+                      : null,
+                ),
         );
       },
+    );
+  }
+}
+
+/// Previous / next controls shown when the viewer was opened from a playlist.
+class _QueueBar extends StatelessWidget {
+  final int index;
+  final int total;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  const _QueueBar({
+    required this.index,
+    required this.total,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 3,
+      color: Theme.of(context).colorScheme.surfaceContainer,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            children: [
+              TextButton.icon(
+                onPressed: onPrevious,
+                icon: const Icon(Icons.skip_previous),
+                label: const Text('Previous'),
+              ),
+              Expanded(
+                child: Text(
+                  '${index + 1} of $total',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onNext,
+                iconAlignment: IconAlignment.end,
+                icon: const Icon(Icons.skip_next),
+                label: const Text('Next'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -12,8 +12,6 @@ class FirestoreRestClient {
         'Content-Type': 'application/json',
       };
 
-  String get _songsPath => '$_base/songs';
-
   Map<String, dynamic> _toFields(Map<String, dynamic> src) {
     final out = <String, dynamic>{};
     for (final e in src.entries) {
@@ -39,33 +37,43 @@ class FirestoreRestClient {
     return out;
   }
 
-  Future<void> upsertSong({
+  /// PATCHes the whole document (no updateMask), so [fields] must carry every
+  /// field or the missing ones are dropped server-side.
+  Future<void> upsertDoc({
+    required String collection,
     required String docId,
-    required Map<String, dynamic> songFields,
+    required Map<String, dynamic> fields,
   }) async {
-    final url = Uri.parse('$_songsPath/$docId');
-    final body = jsonEncode({'fields': _toFields(songFields)});
+    final url = Uri.parse('$_base/$collection/$docId');
+    final body = jsonEncode({'fields': _toFields(fields)});
     final res = await http.patch(url, headers: _headers, body: body);
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception('Upsert failed: ${res.statusCode} ${res.body}');
     }
   }
 
-  Future<void> deleteSong({required String docId}) async {
-    final url = Uri.parse('$_songsPath/$docId');
+  Future<void> deleteDoc({
+    required String collection,
+    required String docId,
+  }) async {
+    final url = Uri.parse('$_base/$collection/$docId');
     final res = await http.delete(url, headers: _headers);
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception('Delete failed: ${res.statusCode} ${res.body}');
     }
   }
 
-  Future<List<Map<String, dynamic>>> getChangesSince({required int since}) async {
+  /// Every document in [collection] with `updatedAt > since`, oldest first.
+  Future<List<Map<String, dynamic>>> getChangesSince({
+    required String collection,
+    required int since,
+  }) async {
     final url = Uri.parse('$_base:runQuery');
 
     final body = {
       'structuredQuery': {
         'from': [
-          {'collectionId': 'songs'}
+          {'collectionId': collection}
         ],
         'where': {
           'fieldFilter': {

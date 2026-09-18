@@ -38,25 +38,28 @@ Riverpod for wiring, no code generation. All providers live in
 
 ```
 UI (screens/, widgets/)
-  -> SongRepo          domain reads/writes over the local store
-    -> LocalDb         sqflite on mobile/desktop, sembast on web
-  -> SyncService       outbox push + delta pull
-    -> FirestoreRestClient   raw REST, no firebase SDK
+  -> SongRepo / PlaylistRepo   domain reads/writes over the local store
+    -> LocalDb                 sqflite on mobile/desktop, sembast on web
+  -> SyncService               outbox push + delta pull
+    -> FirestoreRestClient     raw REST, no firebase SDK
 ```
 
 - **Local-first.** Every write goes to `LocalDb` and an `outbox` row; nothing
   waits on the network. `SyncService.syncNow()` drains the outbox, then pulls
   documents with `updatedAt > last_sync`. A locally `dirty` song wins over the
-  server copy.
+  server copy. Playlists follow the same path: the outbox row carries a `kind`
+  (`song` | `playlist`), the pull uses its own cursor (`last_sync_playlists`
+  in `meta`) against the `playlists` collection.
 - **No Firebase SDK.** [lib/core/firestore_rest.dart](lib/core/firestore_rest.dart)
   hand-rolls the Firestore REST value encoding (`stringValue`, `integerValue`,
   …). Project id is `kProjectId` in providers.dart. Requests are unauthenticated
   — [lib/core/auth_rest.dart](lib/core/auth_rest.dart) exists but is not wired
   in, so **security rules must currently be open**.
-- **Schema versions.** sqflite is at v4: v2 added `lyrics`, v3 added
-  `song_type`/`language`/`theme`, v4 added `themes` and copied `theme` into it.
-  Every migration is an additive `ALTER TABLE ... DEFAULT ''`, so no existing
-  row is rewritten. The v3 `theme` column is now vestigial.
+- **Schema versions.** sqflite is at v5: v2 added `lyrics`, v3 added
+  `song_type`/`language`/`theme`, v4 added `themes` and copied `theme` into it,
+  v5 added the `playlists` table and `outbox.kind`. Every migration is an
+  additive `ALTER TABLE ... DEFAULT ''` (or a new table), so no existing row
+  is rewritten. The v3 `theme` column is now vestigial.
 - **Two `LocalDb` implementations** behind a conditional import in
   [lib/core/local_db_factory.dart](lib/core/local_db_factory.dart). sqflite is
   schema'd and versioned; sembast is schemaless. A new field means adding a
@@ -90,6 +93,28 @@ Because of this, treat `song.chordPro` as raw storage and go through
 - A section with chords typed *inline* with lyrics (`[C]Amazing gra[Am]ce`)
   stays whole in the chord document; `ChordProBlock` positions chords over the
   lyric line.
+
+## Playlists
+
+A `Playlist` is a name plus an ordered `songIds` list, stored `|`-delimited
+like themes (`encodeDelimited`/`decodeDelimited`). Ids of deleted songs are
+kept so the detail screen can show them as missing rather than silently
+shrinking the set. Home is [lib/screens/home_screen.dart](lib/screens/home_screen.dart)
+with a Songs / Playlists `NavigationBar`; each tab keeps its own `Scaffold`.
+[lib/widgets/playlist_dialogs.dart](lib/widgets/playlist_dialogs.dart) holds
+the shared create/rename/save helpers and the "Add to playlist" sheet used from
+the song list's long-press menu. Opening a song from a playlist passes the
+whole id list as `SongViewerScreen.queue`, which adds Previous/Next.
+
+## Copy as text
+
+[lib/core/song_text.dart](lib/core/song_text.dart) renders a song (or a whole
+playlist) to plain text for the clipboard, mirroring the viewer: same view,
+transposition, number mode and Simplify. Chords are laid out over their lyric
+column with spaces, so it pastes cleanly into a monospace slide or doc. The
+Simplify logic lives in [lib/core/chord_simplify.dart](lib/core/chord_simplify.dart)
+so the widget and the exporter share it. The viewer body is also wrapped in a
+`SelectionArea` for partial copies.
 
 ## Categories and browsing
 
@@ -160,8 +185,10 @@ once the store answers — the 3s splash covers the swap.
   `ConnectivityResult.none` (connectivity_plus 6 changed the return type), so
   it is always `true`. Harmless — a failed push is caught and retried — but the
   offline short-circuit does not work.
-- `FirestoreRestClient.upsertSong` PATCHes without an `updateMask`, so it
-  replaces the whole document. `toServerFields()` must always send every field
-  or data is dropped server-side.
+- `FirestoreRestClient.upsertDoc` PATCHes without an `updateMask`, so it
+  replaces the whole document. Every `toServerFields()` must always send every
+  field or data is dropped server-side.
+- Firestore security rules must also allow the `playlists` collection (they
+  are open for `songs` today; an open catch-all rule covers both).
 - `parseSections` computes a `total` count it never uses, left over from a
   disabled "Verse 1 / Verse 2" numbering scheme.

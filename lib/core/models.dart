@@ -3,11 +3,17 @@
 /// a theme name (they use '/' and '&').
 const kThemeSeparator = '|';
 
-String encodeThemes(List<String> themes) =>
-    themes.map((t) => t.trim()).where((t) => t.isNotEmpty).join(kThemeSeparator);
+String encodeThemes(List<String> themes) => encodeDelimited(themes);
 
 /// Tolerates the older single-valued `theme` field and any stray whitespace.
-List<String> decodeThemes(Object? raw) {
+List<String> decodeThemes(Object? raw) => decodeDelimited(raw);
+
+/// The same '|' packing, used for every list a document carries (themes on a
+/// song, song ids on a playlist).
+String encodeDelimited(List<String> items) =>
+    items.map((t) => t.trim()).where((t) => t.isNotEmpty).join(kThemeSeparator);
+
+List<String> decodeDelimited(Object? raw) {
   if (raw is List) {
     return raw.map((e) => '$e'.trim()).where((e) => e.isNotEmpty).toList();
   }
@@ -122,16 +128,89 @@ class Song {
       };
 }
 
+/// An ordered set of songs for a service or event, shared with the team the
+/// same way songs are. Song ids are kept even if a song is later deleted; the
+/// detail screen shows those as missing so they can be removed.
+class Playlist {
+  final String id;
+  final String name;
+  final List<String> songIds; // in performance order
+  final int updatedAt;
+  final bool dirty;
+  final bool deleted;
+
+  const Playlist({
+    required this.id,
+    required this.name,
+    this.songIds = const [],
+    required this.updatedAt,
+    required this.dirty,
+    required this.deleted,
+  });
+
+  Playlist copyWith({
+    String? id,
+    String? name,
+    List<String>? songIds,
+    int? updatedAt,
+    bool? dirty,
+    bool? deleted,
+  }) {
+    return Playlist(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      songIds: songIds ?? this.songIds,
+      updatedAt: updatedAt ?? this.updatedAt,
+      dirty: dirty ?? this.dirty,
+      deleted: deleted ?? this.deleted,
+    );
+  }
+
+  Map<String, Object?> toDb() => {
+        'id': id,
+        'name': name,
+        'song_ids': encodeDelimited(songIds),
+        'updated_at': updatedAt,
+        'dirty': dirty ? 1 : 0,
+        'deleted': deleted ? 1 : 0,
+      };
+
+  static Playlist fromDb(Map<String, Object?> m) => Playlist(
+        id: m['id'] as String,
+        name: (m['name'] as String?) ?? '',
+        songIds: decodeDelimited(m['song_ids']),
+        updatedAt: (m['updated_at'] as int?) ?? 0,
+        dirty: ((m['dirty'] as int?) ?? 0) == 1,
+        deleted: ((m['deleted'] as int?) ?? 0) == 1,
+      );
+
+  Map<String, dynamic> toServerFields() => {
+        'name': name,
+        'songIds': encodeDelimited(songIds),
+        'updatedAt': updatedAt,
+        'deleted': deleted,
+      };
+}
+
+/// What an outbox row refers to. Stored as a string column so the sqflite
+/// migration is a plain `ALTER TABLE ... DEFAULT 'song'`.
+class OutboxKind {
+  static const song = 'song';
+  static const playlist = 'playlist';
+}
+
 class OutboxItem {
   final String id;
-  final String songId;
+  final String songId; // the song or playlist id, depending on [kind]
   final String op; // upsert | delete
+  final String kind; // OutboxKind
   final int createdAt;
 
   const OutboxItem({
     required this.id,
     required this.songId,
     required this.op,
+    this.kind = OutboxKind.song,
     required this.createdAt,
   });
 
@@ -139,6 +218,7 @@ class OutboxItem {
         'id': id,
         'song_id': songId,
         'op': op,
+        'kind': kind,
         'created_at': createdAt,
       };
 
@@ -146,6 +226,7 @@ class OutboxItem {
         id: m['id'] as String,
         songId: m['song_id'] as String,
         op: m['op'] as String,
+        kind: (m['kind'] as String?) ?? OutboxKind.song,
         createdAt: m['created_at'] as int,
       );
 }

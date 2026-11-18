@@ -6,6 +6,7 @@ import '../core/providers.dart';
 import '../core/settings.dart';
 import '../widgets/playlist_dialogs.dart';
 import 'playlist_detail_screen.dart';
+import 'settings_screen.dart';
 
 /// Saved set lists for services and events, so nobody has to search for and
 /// re-open each song while the event is running.
@@ -110,6 +111,13 @@ class PlaylistsScreen extends ConsumerWidget {
             tooltip: themeModeLabels[themeMode],
             icon: Icon(themeModeIcons[themeMode]),
             onPressed: () => ref.read(themeModeProvider.notifier).cycle(),
+          ),
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
           ),
         ],
       ),

@@ -1,4 +1,5 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
 import 'firestore_rest.dart';
@@ -10,7 +11,15 @@ import 'song_repo.dart';
 class SyncResult {
   final int pushed;
   final int pulled;
-  const SyncResult({required this.pushed, required this.pulled});
+
+  /// Nothing was attempted because the device has no connection.
+  final bool offline;
+
+  const SyncResult({
+    required this.pushed,
+    required this.pulled,
+    this.offline = false,
+  });
 }
 
 /// Firestore collection names and the `meta` key holding each pull cursor.
@@ -32,9 +41,15 @@ class SyncService {
     required this.local,
   });
 
+  /// connectivity_plus 6 returns a list; offline is `[none]`. On web this
+  /// follows `navigator.onLine`.
   Future<bool> get _online async {
-    final result = await Connectivity().checkConnectivity();
-    return result != ConnectivityResult.none;
+    try {
+      final results = await Connectivity().checkConnectivity();
+      return results.any((r) => r != ConnectivityResult.none);
+    } catch (_) {
+      return true; // can't tell; let the request decide
+    }
   }
 
   Future<void> _enqueue(String id, String op, String kind) {
@@ -81,13 +96,20 @@ class SyncService {
 
   Future<SyncResult> syncNow() async {
     if (!await _online) {
-      return const SyncResult(pushed: 0, pulled: 0);
+      return const SyncResult(pushed: 0, pulled: 0, offline: true);
     }
 
-    final pushed = await _pushOutbox();
-    final pulled = await _pullSongs() + await _pullPlaylists();
-
-    return SyncResult(pushed: pushed, pulled: pulled);
+    // The device can report a connection that doesn't reach the server
+    // (captive portal, dead Wi-Fi). A transport failure means the same thing
+    // as offline: local data stays as it is and the outbox is retried later.
+    // HTTP error statuses are still thrown as real errors.
+    try {
+      final pushed = await _pushOutbox();
+      final pulled = await _pullSongs() + await _pullPlaylists();
+      return SyncResult(pushed: pushed, pulled: pulled);
+    } on http.ClientException {
+      return const SyncResult(pushed: 0, pulled: 0, offline: true);
+    }
   }
 
   /// Drains the outbox in order and stops at the first failure so the

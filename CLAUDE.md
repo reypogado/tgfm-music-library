@@ -152,6 +152,42 @@ the light/dark/system choice, persisted to SharedPreferences and cycled by the
 app-bar button. It starts on `ThemeMode.system` and settles onto the saved value
 once the store answers — the 3s splash covers the swap.
 
+## PWA / Settings
+
+The web build is an installable PWA: [web/manifest.json](web/manifest.json)
+plus icons generated from `logo2.png` on black (matching the splash), and
+Flutter's own `flutter_service_worker.js` for offline caching.
+
+**Offline rules** (verified by loading once, cutting the network, reloading):
+- Everything the app needs at startup must be same-origin, because the
+  service worker only caches this origin. So
+  [web/flutter_bootstrap.js](web/flutter_bootstrap.js) points
+  `canvasKitBaseUrl` at the local `canvaskit/` (not the gstatic CDN), and
+  Roboto is bundled in `assets/fonts` (the engine skips its fonts.gstatic.com
+  download when a `Roboto` family is declared).
+- Keep UI strings to glyphs Roboto has. Anything else (`→`, `⋮`, emoji) makes
+  the engine fetch a Noto fallback from fonts.gstatic.com, which shows as a
+  box offline.
+- The worker caches lazily, so on a first visit nothing would be cached until
+  a second online visit. A script in index.html re-requests every loaded
+  same-origin file once the worker controls the page (after
+  `flutter-first-frame`), so one online visit is enough.
+- Flutter has deprecated its generated service worker. After an SDK upgrade,
+  check `build/web/flutter_service_worker.js` still has a real fetch handler.
+- `SyncService.syncNow()` returns `SyncResult(offline: true)` when
+  `navigator.onLine`/connectivity says offline *or* the request fails at the
+  transport level (`http.ClientException`). Nothing in the UI awaits a sync
+  before continuing; the editor fires it and pops.
+[web/index.html](web/index.html) defines `window.tgfmPwa`, which captures
+`beforeinstallprompt` before Flutter boots. Dart reads it through
+[lib/core/pwa_install.dart](lib/core/pwa_install.dart) (conditional import:
+`pwa_install_web.dart` uses `dart:js_interop`, the stub covers native).
+[lib/screens/settings_screen.dart](lib/screens/settings_screen.dart), opened
+from the gear on both home tabs, holds the theme picker and, on web only, an
+"Install app" section: a one-tap button where the browser offers a prompt
+(Chrome/Edge/Android), otherwise manual steps per platform (iOS Safari,
+Mac Safari, Firefox).
+
 ## Rendering
 
 - [lib/widgets/chordpro_block.dart](lib/widgets/chordpro_block.dart) measures
@@ -181,10 +217,6 @@ once the store answers — the 3s splash covers the swap.
 
 ## Known rough edges
 
-- `SyncService._online` compares a `List<ConnectivityResult>` against
-  `ConnectivityResult.none` (connectivity_plus 6 changed the return type), so
-  it is always `true`. Harmless — a failed push is caught and retried — but the
-  offline short-circuit does not work.
 - `FirestoreRestClient.upsertDoc` PATCHes without an `updateMask`, so it
   replaces the whole document. Every `toServerFields()` must always send every
   field or data is dropped server-side.

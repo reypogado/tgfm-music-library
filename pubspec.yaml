@@ -90,6 +90,16 @@ flutter:
   # list giving the asset and other descriptors for the font. For
   # example:
   fonts:
+    # Bundled so the web build never fetches Roboto from fonts.gstatic.com,
+    # which would leave the UI without text when offline. Copied from the
+    # Flutter SDK's bin/cache/artifacts/material_fonts.
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700
     - family: RobotoMono
       fonts:
         - asset: assets/fonts/RobotoMono-Regular.ttf

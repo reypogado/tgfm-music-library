@@ -8,6 +8,7 @@ import '../core/settings.dart';
 import '../core/song_content.dart';
 import '../core/song_taxonomy.dart';
 import '../widgets/playlist_dialogs.dart';
+import 'settings_screen.dart';
 import 'song_editor_screen.dart';
 import 'song_viewer_screen.dart';
 
@@ -51,7 +52,11 @@ class _SongListScreenState extends ConsumerState<SongListScreen> {
       final r = await ref.read(syncServiceProvider).syncNow();
       ref.invalidate(songsProvider);
       ref.invalidate(playlistsProvider);
-      setState(() => _syncMsg = 'Synced: pushed ${r.pushed}, pulled ${r.pulled}');
+      setState(
+        () => _syncMsg = r.offline
+            ? 'Offline: showing saved songs. Changes sync when you reconnect.'
+            : 'Synced: pushed ${r.pushed}, pulled ${r.pulled}',
+      );
     } catch (e) {
       setState(() => _syncMsg = 'Sync error: $e');
     } finally {
@@ -214,6 +219,13 @@ class _SongListScreenState extends ConsumerState<SongListScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.sync),
+          ),
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
           ),
         ],
       ),

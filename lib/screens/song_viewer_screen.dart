@@ -224,7 +224,9 @@ class _SongViewerScreenState extends ConsumerState<SongViewerScreen> {
                           Expanded(
                             child: hasKey
                                 ? Text(
-                                    'Key: ${song.keyName} → $newKey '
+                                    // No arrow glyph: Roboto lacks one, and
+                                    // its fallback font needs the network.
+                                    'Key: ${song.keyName} to $newKey '
                                     '(${transposeLabel(_transpose)})',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,

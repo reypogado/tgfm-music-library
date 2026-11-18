@@ -48,7 +48,9 @@
 .dart_tool/
 .packages
 .pub/
-build/
+# build/web is committed: Vercel deploys it as-is (vercel.json skips the build).
+build/*
+!build/web/
 
 # Flutter generated
 .flutter-plugins

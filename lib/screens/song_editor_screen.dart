@@ -211,7 +211,9 @@ class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
             );
 
       await sync.queueUpsert(s);
-      await sync.syncNow();
+      // Saved locally and queued; push in the background so saving never
+      // waits on (or fails because of) the network. The outbox retries.
+      sync.syncNow().ignore();
       if (mounted) Navigator.pop(context);
     } finally {
       if (mounted) setState(() => _saving = false);

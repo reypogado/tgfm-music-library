@@ -18,19 +18,150 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Chords and lyrics for the TGFM worship team, available offline.">
+  <meta name="theme-color" content="#000000">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="tgfm_music_library">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <meta name="apple-mobile-web-app-title" content="TGFM">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="logo.png"/>
+  <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>tgfm_music_library</title>
+  <title>TGFM Music Library</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body { background: #000000; }
+  </style>
+
+  <script>
+    // Install helper read by lib/core/pwa_install_web.dart.
+    //
+    // `beforeinstallprompt` can fire before Flutter has started, so it is
+    // captured here, as early as possible, and handed to Dart on request.
+    // It is deliberately not preventDefault()ed, so Chrome's own install
+    // banner still appears; the stashed event can still be prompted later.
+    window.tgfmPwa = (function () {
+      var deferred = null;
+      var installedHere = false;
+      var listeners = [];
+
+      function notify() {
+        listeners.slice().forEach(function (cb) {
+          try { cb(); } catch (_) {}
+        });
+      }
+
+      window.addEventListener('beforeinstallprompt', function (e) {
+        deferred = e;
+        notify();
+      });
+      window.addEventListener('appinstalled', function () {
+        deferred = null;
+        installedHere = true;
+        notify();
+      });
+
+      return {
+        canPrompt: function () { return deferred !== null; },
+
+        // True once this tab has installed the app (it is still a tab).
+        wasInstalled: function () { return installedHere; },
+
+        isStandalone: function () {
+          return window.matchMedia('(display-mode: standalone)').matches ||
+            window.matchMedia('(display-mode: fullscreen)').matches ||
+            window.navigator.standalone === true;
+        },
+
+        // One of: ios, android, mac-safari, firefox-desktop, desktop.
+        platform: function () {
+          var ua = navigator.userAgent || '';
+          var iPadOs = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+          if (/iPhone|iPad|iPod/.test(ua) || iPadOs) return 'ios';
+          if (/Android/.test(ua)) return 'android';
+          if (/Firefox\//.test(ua)) return 'firefox-desktop';
+          if (/Macintosh/.test(ua) && /Safari\//.test(ua) &&
+              !/Chrome\/|Chromium\/|Edg\//.test(ua)) return 'mac-safari';
+          return 'desktop';
+        },
+
+        // Resolves to 'accepted', 'dismissed' or 'unavailable'.
+        prompt: function () {
+          var e = deferred;
+          if (!e) return Promise.resolve('unavailable');
+          deferred = null; // a prompt event can only be used once
+          notify();
+          return e.prompt()
+            .then(function () { return e.userChoice; })
+            .then(function (choice) { return choice.outcome; })
+            .catch(function () { return 'unavailable'; });
+        },
+
+        // Calls `cb` whenever the install state may have changed.
+        // Returns a function that unsubscribes.
+        subscribe: function (cb) {
+          listeners.push(cb);
+          return function () {
+            var i = listeners.indexOf(cb);
+            if (i >= 0) listeners.splice(i, 1);
+          };
+        },
+      };
+    })();
+  </script>
+
+  <script>
+    // Make the app open offline after a single online visit.
+    //
+    // flutter_service_worker.js caches files lazily, as they pass through it.
+    // On the first visit the page (index.html, main.dart.js, CanvasKit, fonts)
+    // finishes loading before the worker takes control, so none of it would
+    // be cached until a second online visit. Once the worker controls the
+    // page, re-request everything already loaded from this origin; the worker
+    // stores each one (mostly straight from the HTTP cache, so it costs
+    // little). Anything loaded later in the session goes through the worker
+    // and is cached then.
+    (function () {
+      if (!('serviceWorker' in navigator) || !window.caches) return;
+
+      function controlled() {
+        if (navigator.serviceWorker.controller) return Promise.resolve();
+        return new Promise(function (resolve) {
+          navigator.serviceWorker.addEventListener(
+            'controllerchange', function () { resolve(); }, { once: true });
+        });
+      }
+
+      function firstFrame() {
+        return new Promise(function (resolve) {
+          window.addEventListener(
+            'flutter-first-frame', function () { resolve(); }, { once: true });
+        });
+      }
+
+      function warm() {
+        var origin = location.origin;
+        var urls = { './': true }; // the page itself, cached under "/"
+        performance.getEntriesByType('resource').forEach(function (e) {
+          if (e.name.indexOf(origin + '/') !== 0) return;
+          if (e.name.indexOf('flutter_service_worker.js') !== -1) return;
+          urls[e.name] = true;
+        });
+        Object.keys(urls).forEach(function (url) {
+          fetch(url).catch(function () {});
+        });
+      }
+
+      // After the first frame CanvasKit, main.dart.js and the fonts have all
+      // been requested, so the resource list is complete.
+      Promise.all([firstFrame(), controlled()]).then(warm);
+    })();
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

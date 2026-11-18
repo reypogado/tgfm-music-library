@@ -1,12 +1,15 @@
 {
-    "name": "tgfm_music_library",
-    "short_name": "tgfm_music_library",
+    "id": "/",
+    "name": "TGFM Music Library",
+    "short_name": "TGFM",
+    "description": "Chords and lyrics for the TGFM worship team, available offline.",
     "start_url": ".",
+    "scope": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#000000",
+    "theme_color": "#000000",
+    "orientation": "any",
+    "categories": ["music", "productivity"],
     "prefer_related_applications": false,
     "icons": [
         {
